@@ -1,0 +1,42 @@
+#!/usr/bin/python3
+## Usage:
+##   ./certcheck -d DAYS <file/folder> <file/folder> ...
+## Recursively crawl all given folders for files ending in '.crt', and check all of them and all given files for their
+## expiry date. If that is less than DAYS in the future, print that information.
+
+import argparse, subprocess, re, os, datetime
+
+def check_dir(dirname, days):
+    for name in os.listdir(dirname):
+        name = os.path.join(dirname, name)
+        if os.path.isdir(name):
+            check_dir(name, days)
+        elif name.endswith('.crt'):
+            check_file(name, days)
+
+def check_file(filename, days):
+    valid_not_after = subprocess.check_output(["openssl", "x509", "-enddate", "-in", filename, "-out", "/dev/null"]).decode('utf-8')
+    match = re.match("notAfter=([a-zA-Z0-9: ]+)", valid_not_after)
+    assert match is not None, "Unexpected output from openssl: valid_not_after"
+    enddate = match.group(1)
+    enddate = datetime.datetime.strptime(enddate, '%b %d %X %Y %Z')
+    delta = enddate - datetime.datetime.now()
+    if delta < datetime.timedelta(days=days):
+        print("{} expires at {}, which is in {} days".format(filename, enddate, delta.days))
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Check for soon-to-expire (and already expired) certificates')
+    parser.add_argument("-d", "--days", metavar='N',
+                        dest="days", type=int, default=14,
+                        help="Warn about certificates valid for less than N (default 7)")
+    parser.add_argument("certs",  metavar='CERTS', nargs='+',
+                        help="These certificate files are checked. Directories are searched recursively for files called '*.crt'.")
+    args = parser.parse_args()
+    
+    for name in args.certs:
+        if os.path.isdir(name):
+            check_dir(name, args.days)
+        else:
+            check_file(name, args.days)
+
+    
