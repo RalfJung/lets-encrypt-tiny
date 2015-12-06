@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
-## ./gencsr.sh KEY.key DOMAIN1 DOMAIN2: Generate (to stdout) a CSR for this key, for all the domains listed later
+## Usage:
+##   ./gencsr KEY.key DOMAIN1 DOMAIN2
+## Generate (to stdout) a CSR for this key, for all the domains listed later
 
 KEY="$1"
 shift
