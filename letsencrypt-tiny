@@ -79,7 +79,7 @@ def request_cert(name):
     if not os.path.exists(keyfile(name)):
         raise Exception("No such key: {}".format(name))
     domains = config['DEFAULT']['domains'].split()
-    print("Obtaining certificate '{}' for domains {}".format(name, ' '.join(domains)))
+    print("Obtaining certificate '{}' for domains: {}".format(name, ' '.join(domains)))
     acme(name, domains)
 
 def generate_key(name):
