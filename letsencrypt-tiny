@@ -60,7 +60,7 @@ def acme(name, domains):
         file.write(csr)
     # call acme-tiny as a script
     acme_tiny = os.path.join(config['acme']['acme-tiny'], 'acme_tiny.py')
-    signed_crt = subprocess.check_output([acme_tiny, "--quiet", "--account-key", config['acme']['account-key'], "--csr", csrfile(name), "--acme-dir", config['acme']['challenge-dir']])
+    signed_crt = subprocess.check_output(["python", acme_tiny, "--quiet", "--account-key", config['acme']['account-key'], "--csr", csrfile(name), "--acme-dir", config['acme']['challenge-dir']])
     # save new certificate
     make_backup(certfile(name))
     with open(certfile(name), 'wb') as f:
