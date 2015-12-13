@@ -66,7 +66,7 @@ def acme(name, domains):
     with open(certfile(name), 'wb') as f:
         f.write(signed_crt)
     # append DH params
-    dhfile = config['DEFAULT']['dh-params']
+    dhfile = config['DEFAULT'].get('dh-params')
     if dhfile is not None:
         with open(dhfile, 'rb') as f:
             dh = f.read()
@@ -97,9 +97,10 @@ def generate_key(name):
 def check_staging():
     '''Returns 0 if nothing was done, 1 if a stage key is present but has to be kept, 2 is a stage key was unstaged.'''
     live = config['files']['live']
-    staging = config['files']['staging']
+    staging = config['files'].get('staging')
     if staging is None or not os.path.exists(keyfile(staging)):
         return 0
+    
     staging_time = datetime.timedelta(hours = int(config['timing']['staging-hours']))
     key_age = datetime.datetime.now() - key_mtime(staging)
     if key_age < staging_time:
@@ -119,7 +120,7 @@ def check_staging():
 def auto_renewal():
     '''Returns 0 if nothing was done, 1 if only certs were changed, 2 if certs and keys were changed.'''
     live = config['files']['live']
-    staging = config['files']['staging']
+    staging = config['files'].get('staging')
     
     max_key_age = datetime.timedelta(days = int(config['timing']['max-key-age-days']))
     renew_cert_time = datetime.timedelta(days = int(config['timing']['renew-cert-before-expiry-days']))
@@ -168,7 +169,7 @@ if __name__ == "__main__":
     
     if args.action[0] == 'renew':
         live = config['files']['live']
-        staging = config['files']['staging']
+        staging = config['files'].get('staging')
         
         request_cert(live)
         if staging is not None and os.path.exists(keyfile(staging)):
