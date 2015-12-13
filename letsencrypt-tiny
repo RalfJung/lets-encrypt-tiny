@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 ## Call with "--help" for documentation.
 
-import argparse, configparser, itertools, os, os.path, sys, subprocess, datetime
+import argparse, configparser, itertools, stat, os, os.path, sys, subprocess, datetime
 
 ## Helper functions
 def readConfig(fname, defSection = 'DEFAULT'):
@@ -30,7 +30,7 @@ def make_backup(fname):
         while True:
             backupfile = os.path.join(config['dirs']['backups'], backupname + "." + str(i))
             if not os.path.exists(backupfile):
-                os.rename(fname, backupfile)
+                os.rename(src = fname, dst = backupfile)
                 break
             elif i >= 100:
                 print("Somehow it's really hard to find a name for the backup file...")
@@ -43,42 +43,108 @@ def trigger_hook(hook):
     if exe is not None:
         subprocess.check_call([exe])
 
+def key_mtime(name):
+    return datetime.datetime.fromtimestamp(os.stat(keyfile(name)).st_mtime)
+
+def cert_expiry(name):
+    from certcheck import cert_expiry_date
+    return cert_expiry_date(certfile(name))
+
 ## The interesting work
-def gencsr(name, domains):
-    # This is done by a shell script
+def acme(name, domains):
+    global config
+    # Generating the CSR is done by a shell script
     exe = os.path.join(os.path.dirname(__file__), 'gencsr')
     csr = subprocess.check_output([exe, keyfile(name)] + domains)
     with open(csrfile(name), 'wb') as file:
         file.write(csr)
-
-def acme(name, domains):
-    global config
-    print("Obtaining certificate {} for domains {}".format(name, ' '.join(domains)))
-    gencsr(name, domains)
     # call acme-tiny as a script
     acme_tiny = os.path.join(config['acme']['acme-tiny'], 'acme_tiny.py')
     signed_crt = subprocess.check_output([acme_tiny, "--quiet", "--account-key", config['acme']['account-key'], "--csr", csrfile(name), "--acme-dir", config['acme']['challenge-dir']])
     # save new certificate
     make_backup(certfile(name))
-    with open(certfile(name), 'wb') as file:
-        file.write(signed_crt)
+    with open(certfile(name), 'wb') as f:
+        f.write(signed_crt)
     # append DH params
     dhfile = config['DEFAULT']['dh-params']
     if dhfile is not None:
-        with open(dhfile, 'rb') as file:
-            dh = file.read()
-        make_backup(certfile(name, 'dh'))
-        with open(certfile(name, 'dh'), 'wb') as file:
-            file.write(signed_crt)
-            file.write(dh)
+        with open(dhfile, 'rb') as f:
+            dh = f.read()
+        with open(certfile(name, 'dh'), 'wb') as f:
+            f.write(signed_crt)
+            f.write(dh)
 
-def getcert(name):
+def request_cert(name):
     global config
     if not os.path.exists(keyfile(name)):
         raise Exception("No such key: {}".format(name))
     domains = config['DEFAULT']['domains'].split()
+    print("Obtaining certificate '{}' for domains {}".format(name, ' '.join(domains)))
     acme(name, domains)
-    trigger_hook('post-cert')
+
+def generate_key(name):
+    print("Generating new private key '{}'".format(name))
+    with subprocess.Popen(["openssl", "genrsa", str(int(config['DEFAULT']['key-length']))], stdout=subprocess.PIPE, stderr=subprocess.PIPE) as f:
+        (stdout, stderr) = f.communicate()
+        if f.returncode:
+            sys.stderr.write(stderr)
+            raise Exception("Error while generating private key")
+    # now we have a key, save it
+    make_backup(keyfile(name))
+    with open(keyfile(name), 'wb') as f:
+        f.write(stdout)
+
+def check_staging():
+    '''Returns 0 if nothing was done, 1 if a stage key is present but has to be kept, 2 is a stage key was unstaged.'''
+    live = config['files']['live']
+    staging = config['files']['staging']
+    if staging is None or not os.path.exists(keyfile(staging)):
+        return 0
+    staging_time = datetime.timedelta(hours = int(config['timing']['staging-hours']))
+    key_age = datetime.datetime.now() - key_mtime(staging)
+    if key_age < staging_time:
+        return 1
+    print("Unstaging '{}' to '{}'".format(staging, live))
+    # unstage the key!
+    make_backup(keyfile(live))
+    os.rename(src = keyfile(staging), dst = keyfile(live))
+    make_backup(certfile(live))
+    os.rename(src = certfile(staging), dst = certfile(live))
+    try:
+        os.rename(src = certfile(staging, 'dh'), dst = certfile(live, 'dh'))
+    except FileNotFoundError:
+        pass
+    return 2
+
+def auto_renewal():
+    '''Returns 0 if nothing was done, 1 if only certs were changed, 2 if certs and keys were changed.'''
+    live = config['files']['live']
+    staging = config['files']['staging']
+    
+    max_key_age = datetime.timedelta(days = int(config['timing']['max-key-age-days']))
+    renew_cert_time = datetime.timedelta(days = int(config['timing']['renew-cert-before-expiry-days']))
+    
+    # determine what to do
+    now = datetime.datetime.now()
+    key_age = now - key_mtime(live)
+    cert_validity = cert_expiry(live) - now
+    need_new_key = key_age >= max_key_age
+    need_new_cert = cert_validity <= renew_cert_time
+    if need_new_cert and key_age + renew_cert_time >= max_key_age:
+        # We are about to request a new certificate, and within <renew_cert_time>, we need a new key: Get the new key now
+        need_new_key = True
+    
+    # Do it
+    if need_new_key:
+        new_key_name = (live if staging is None else staging)
+        generate_key(new_key_name)
+        request_cert(new_key_name)
+        return 2
+    elif need_new_cert:
+        request_cert(live)
+        return 1
+    else:
+        return 0
 
 ## Main
 if __name__ == "__main__":
@@ -87,9 +153,11 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--config",
                         dest="config",
                         help="The configuration file")
-    parser.add_argument
+    parser.add_argument("-k", "--hooks",
+                        dest="hooks", action="store_true",
+                        help="Trigger hooks.")
     parser.add_argument("action", metavar='ACTION', nargs=1,
-                        help="The action to perform. Possible values: renew, cron")
+                        help="The action to perform. Possible values: init, renew, cron")
     args = parser.parse_args()
     
     # read config
@@ -99,10 +167,48 @@ if __name__ == "__main__":
     config = readConfig(args.config)
     
     if args.action[0] == 'renew':
-        getcert(config['files']['live'])
-        # We may also have to renew the staging
+        live = config['files']['live']
         staging = config['files']['staging']
+        
+        request_cert(live)
         if staging is not None and os.path.exists(keyfile(staging)):
-            getcert(staging)
+            request_cert(staging)
+        # trigger the "new cert" hook
+        if args.hooks:
+            trigger_hook('post-certchange')
+    elif args.action[0] == 'cron':
+        # First, check if we need to unstage a staging key
+        unstaged = check_staging()
+        if unstaged >= 1:
+            # A staging eky is present, do *not* check for renewal
+            if unstaged >= 2 and args.hooks:
+                # trigger all the hooks
+                trigger_hook('post-certchange')
+                trigger_hook('post-keychange')
+        else:
+            # Check if we need to renew anything
+            renewed = auto_renewal()
+            if args.hooks:
+                if renewed >= 1:
+                    trigger_hook('post-certchange')
+                if renewed >= 2:
+                    trigger_hook('post-keychange')
+    elif args.action[0] == 'init':
+        # create directories with appropriate permissions
+        try:
+            os.makedirs(config['dirs']['certs'], mode = 0o755, exist_ok = True)
+            os.makedirs(config['dirs']['keys'], mode = 0o710, exist_ok = True)
+            os.makedirs(config['dirs']['csrs'], mode = 0o755, exist_ok = True)
+            os.makedirs(config['dirs']['backups'], mode = 0o700, exist_ok = True)
+        except OSError:
+            pass
+        # if necessary, generate key + certificate
+        live = config['files']['live']
+        if not os.path.exists(keyfile(live)):
+            generate_key(live)
+            request_cert(live)
+            if args.hooks:
+                trigger_hook('post-certchange')
+                trigger_hook('post-keychange')
     else:
         raise Exception("Unknown action {}".format(args.action))
