@@ -1,8 +1,5 @@
 #!/usr/bin/python3
-## Usage:
-##   ./certcheck -d DAYS <file/folder> <file/folder> ...
-## Recursively crawl all given folders for files ending in '.crt', and check all of them and all given files for their
-## expiry date. If that is less than DAYS in the future, print that information.
+## Call with "--help" for documentation.
 
 import argparse, subprocess, re, os, datetime
 
@@ -28,7 +25,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Check for soon-to-expire (and already expired) certificates')
     parser.add_argument("-d", "--days", metavar='N',
                         dest="days", type=int, default=14,
-                        help="Warn about certificates valid for less than N (default 7)")
+                        help="Warn about certificates valid for less than N (default 14).")
     parser.add_argument("certs",  metavar='CERTS', nargs='+',
                         help="These certificate files are checked. Directories are searched recursively for files called '*.crt'.")
     args = parser.parse_args()
