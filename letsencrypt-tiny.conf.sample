@@ -11,7 +11,7 @@ key-length = 4096
 [timing]
 # After how many days should the private key be re-generated?
 max-key-age-days = 180
-# How many hours should a new private key be left in staging? (0 for no staging)
+# How many hours should a new private key be left in staging? (Must be set iff 'staging' is set in [files].)
 staging-hours = 25
 # How many days before a certificate expires, should it be renewed?
 renew-cert-before-expiry-days = 15
