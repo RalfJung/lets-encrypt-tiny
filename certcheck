@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 ## Call with "--help" for documentation.
 
-import argparse, certcheck
+import argparse, certcheck, os
 
 parser = argparse.ArgumentParser(description='Check for soon-to-expire (and already expired) certificates')
 parser.add_argument("-d", "--days", metavar='N',
