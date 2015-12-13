@@ -1,0 +1,108 @@
+#!/usr/bin/env python3
+## Call with "--help" for documentation.
+
+import argparse, configparser, itertools, os, os.path, sys, subprocess, datetime
+
+## Helper functions
+def readConfig(fname, defSection = 'DEFAULT'):
+    config = configparser.ConfigParser()
+    with open(fname) as file:
+        stream = itertools.chain(("["+defSection+"]\n",), file)
+        config.read_file(stream)
+    return config
+
+def certfile(name, suff = None):
+    global config
+    return os.path.join(config['dirs']['certs'], name + ".crt" + ('' if suff is None else '+'+suff) )
+
+def keyfile(name):
+    global config
+    return os.path.join(config['dirs']['keys'], name + ".key")
+
+def csrfile(name):
+    global config
+    return os.path.join(config['dirs']['csrs'], name + ".csr")
+
+def make_backup(fname):
+    if os.path.exists(fname):
+        backupname = os.path.basename(fname) + "." + str(datetime.date.today())
+        i = 0
+        while True:
+            backupfile = os.path.join(config['dirs']['backups'], backupname + "." + str(i))
+            if not os.path.exists(backupfile):
+                os.rename(fname, backupfile)
+                break
+            elif i >= 100:
+                print("Somehow it's really hard to find a name for the backup file...")
+            i += 1
+    assert not os.path.exists(fname)
+
+def trigger_hook(hook):
+    global config
+    exe = config['hooks'][hook]
+    if exe is not None:
+        subprocess.check_call([exe])
+
+## The interesting work
+def gencsr(name, domains):
+    # This is done by a shell script
+    exe = os.path.join(os.path.dirname(__file__), 'gencsr')
+    csr = subprocess.check_output([exe, keyfile(name)] + domains)
+    with open(csrfile(name), 'wb') as file:
+        file.write(csr)
+
+def acme(name, domains):
+    global config
+    print("Obtaining certificate {} for domains {}".format(name, ' '.join(domains)))
+    gencsr(name, domains)
+    # call acme-tiny as a script
+    acme_tiny = os.path.join(config['acme']['acme-tiny'], 'acme_tiny.py')
+    signed_crt = subprocess.check_output([acme_tiny, "--quiet", "--account-key", config['acme']['account-key'], "--csr", csrfile(name), "--acme-dir", config['acme']['challenge-dir']])
+    # save new certificate
+    make_backup(certfile(name))
+    with open(certfile(name), 'wb') as file:
+        file.write(signed_crt)
+    # append DH params
+    dhfile = config['DEFAULT']['dh-params']
+    if dhfile is not None:
+        with open(dhfile, 'rb') as file:
+            dh = file.read()
+        make_backup(certfile(name, 'dh'))
+        with open(certfile(name, 'dh'), 'wb') as file:
+            file.write(signed_crt)
+            file.write(dh)
+
+def getcert(name):
+    global config
+    if not os.path.exists(keyfile(name)):
+        raise Exception("No such key: {}".format(name))
+    domains = config['DEFAULT']['domains'].split()
+    acme(name, domains)
+    trigger_hook('post-cert')
+
+## Main
+if __name__ == "__main__":
+    # allow overwriting some values on the command-line
+    parser = argparse.ArgumentParser(description='Generate and (automatically) renew certificates, optionally providing staging for new keys')
+    parser.add_argument("-c", "--config",
+                        dest="config",
+                        help="The configuration file")
+    parser.add_argument
+    parser.add_argument("action", metavar='ACTION', nargs=1,
+                        help="The action to perform. Possible values: renew, cron")
+    args = parser.parse_args()
+    
+    # read config
+    if not os.path.isfile(args.config):
+        raise Exception("The config file does not exist: "+args.config)
+    global config
+    config = readConfig(args.config)
+    
+    if args.action[0] == 'renew':
+        getcert(config['files']['live'])
+        # We may also have to renew the staging
+        staging = config['files']['staging']
+        if staging is not None and os.path.exists(keyfile(staging)):
+            getcert(staging)
+    else:
+        raise Exception("Unknown action {}".format(args.action))
