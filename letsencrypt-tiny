@@ -11,7 +11,7 @@ def readConfig(fname, defSection = 'DEFAULT'):
         config.read_file(stream)
     return config
 
-def certfile(name, suff = None):
+def certfile(name):
     global config
     return os.path.join(config['dirs']['certs'], name + ".crt" + ('' if suff is None else '+'+suff) )
 
@@ -65,22 +65,6 @@ def acme(name, domains):
     make_backup(certfile(name))
     with open(certfile(name), 'wb') as f:
         f.write(signed_crt)
-    # append DH params
-    dhfile = config['DEFAULT'].get('dh-params')
-    if dhfile is not None:
-        with open(dhfile, 'rb') as f:
-            dh = f.read()
-        with open(certfile(name, 'dh'), 'wb') as f:
-            f.write(signed_crt)
-            f.write(dh)
-    # append chain
-    chainfile = config['DEFAULT'].get('chain')
-    if chainfile is not None:
-        with open(chainfile, 'rb') as f:
-            chain = f.read()
-        with open(certfile(name, 'chain'), 'wb') as f:
-            f.write(signed_crt)
-            f.write(chain)
 
 def request_cert(name):
     global config
@@ -119,14 +103,6 @@ def check_staging():
     os.rename(src = keyfile(staging), dst = keyfile(live))
     make_backup(certfile(live))
     os.rename(src = certfile(staging), dst = certfile(live))
-    try:
-        os.rename(src = certfile(staging, 'dh'), dst = certfile(live, 'dh'))
-    except FileNotFoundError:
-        pass
-    try:
-        os.rename(src = certfile(staging, 'chain'), dst = certfile(live, 'chain'))
-    except FileNotFoundError:
-        pass
     return 2
 
 def auto_renewal():
