@@ -13,7 +13,7 @@ def readConfig(fname, defSection = 'DEFAULT'):
 
 def certfile(name):
     global config
-    return os.path.join(config['dirs']['certs'], name + ".crt" + ('' if suff is None else '+'+suff) )
+    return os.path.join(config['dirs']['certs'], name + ".crt" )
 
 def keyfile(name):
     global config
