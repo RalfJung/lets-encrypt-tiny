@@ -21,7 +21,7 @@ def keyfile(name):
 
 def csrfile(name):
     global config
-    return os.path.join(config['dirs']['csrs'], name + ".csr")
+    return os.path.join(config['dirs']['keys'], name + ".csr.tmp")
 
 def make_backup(fname):
     if os.path.exists(fname):
@@ -65,6 +65,8 @@ def acme(name, domains):
     make_backup(certfile(name))
     with open(certfile(name), 'wb') as f:
         f.write(signed_crt)
+    # clean up
+    os.remove(csrfile(name))
 
 def request_cert(name):
     global config

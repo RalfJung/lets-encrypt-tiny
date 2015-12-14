@@ -34,7 +34,6 @@ challenge-dir = /srv/acme-challenge/
 [dirs]
 certs = /etc/ssl/mycerts/letsencrypt
 keys = /etc/ssl/private/letsencrypt
-csrs = /etc/ssl/private/letsencrypt
 backups = /etc/ssl/old/letsencrypt
 
 [files]
