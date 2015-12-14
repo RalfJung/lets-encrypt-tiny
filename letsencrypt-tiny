@@ -30,7 +30,7 @@ def make_backup(fname):
         while True:
             backupfile = os.path.join(config['dirs']['backups'], backupname + "." + str(i))
             if not os.path.exists(backupfile):
-                os.rename(src = fname, dst = backupfile)
+                os.rename(fname, backupfile)
                 break
             elif i >= 100:
                 print("Somehow it's really hard to find a name for the backup file...")
@@ -100,9 +100,9 @@ def check_staging():
     print("Unstaging '{}' to '{}'".format(staging, live))
     # unstage the key!
     make_backup(keyfile(live))
-    os.rename(src = keyfile(staging), dst = keyfile(live))
+    os.rename(keyfile(staging), keyfile(live))
     make_backup(certfile(live))
-    os.rename(src = certfile(staging), dst = certfile(live))
+    os.rename(certfile(staging), certfile(live))
     return 2
 
 def auto_renewal():
