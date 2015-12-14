@@ -83,19 +83,17 @@ def generate_key(name):
         if f.returncode:
             sys.stderr.write(stderr)
             raise Exception("Error while generating private key")
-    # now we have a key, save it
-    make_backup(keyfile(name))
+    # Now we have a key, save it. This should never overwrite anything.
+    assert not os.path.exists(keyfile(name))
     with open(keyfile(name), 'wb') as f:
         f.write(stdout)
 
-def check_staging():
+def check_staging(live, staging):
     '''Returns 0 if nothing was done, 1 if a stage key is present but has to be kept, 2 is a stage key was unstaged.'''
-    live = config['files']['live']
-    staging = config['files'].get('staging')
-    if staging is None or not os.path.exists(keyfile(staging)):
+    if not os.path.exists(keyfile(staging)):
         return 0
     
-    staging_time = datetime.timedelta(hours = int(config['timing']['staging-hours']))
+    staging_time = datetime.timedelta(hours = int(config['timing'].get('staging-hours', 0)))
     key_age = datetime.datetime.now() - key_mtime(staging)
     if key_age < staging_time:
         return 1
@@ -107,11 +105,8 @@ def check_staging():
     os.rename(certfile(staging), certfile(live))
     return 2
 
-def auto_renewal():
+def auto_renewal(live, staging):
     '''Returns 0 if nothing was done, 1 if only certs were changed, 2 if certs and keys were changed.'''
-    live = config['files']['live']
-    staging = config['files'].get('staging')
-    
     max_key_age = datetime.timedelta(days = int(config['timing']['max-key-age-days']))
     renew_cert_time = datetime.timedelta(days = int(config['timing']['renew-cert-before-expiry-days']))
     
@@ -127,9 +122,9 @@ def auto_renewal():
     
     # Do it
     if need_new_key:
-        new_key_name = (live if staging is None else staging)
-        generate_key(new_key_name)
-        request_cert(new_key_name)
+        generate_key(staging)
+        request_cert(staging)
+        check_staging(live, staging) # we may want to immediately enable the new key & cert
         return 2
     elif need_new_cert:
         request_cert(live)
@@ -157,28 +152,27 @@ if __name__ == "__main__":
     global config
     config = readConfig(args.config)
     
+    live = config['files']['live']
+    staging = config['files']['staging']
     if args.action[0] == 'renew':
-        live = config['files']['live']
-        staging = config['files'].get('staging')
-        
         request_cert(live)
-        if staging is not None and os.path.exists(keyfile(staging)):
+        if os.path.exists(keyfile(staging)) and os.path.exists(certfile(staging)):
             request_cert(staging)
         # trigger the "new cert" hook
         if args.hooks:
             trigger_hook('post-certchange')
     elif args.action[0] == 'cron':
         # First, check if we need to unstage a staging key
-        unstaged = check_staging()
+        unstaged = check_staging(live, staging)
         if unstaged >= 1:
-            # A staging eky is present, do *not* check for renewal
+            # A staging key is present, do *not* check for renewal
             if unstaged >= 2 and args.hooks:
                 # trigger all the hooks
                 trigger_hook('post-certchange')
                 trigger_hook('post-keychange')
         else:
             # Check if we need to renew anything
-            renewed = auto_renewal()
+            renewed = auto_renewal(live, staging)
             if args.hooks:
                 if renewed >= 1:
                     trigger_hook('post-certchange')
