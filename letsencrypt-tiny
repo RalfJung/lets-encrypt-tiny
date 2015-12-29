@@ -183,7 +183,6 @@ if __name__ == "__main__":
         try:
             os.makedirs(config['dirs']['certs'], mode = 0o755, exist_ok = True)
             os.makedirs(config['dirs']['keys'], mode = 0o710, exist_ok = True)
-            os.makedirs(config['dirs']['csrs'], mode = 0o755, exist_ok = True)
             os.makedirs(config['dirs']['backups'], mode = 0o700, exist_ok = True)
         except OSError:
             pass
