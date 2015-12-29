@@ -35,7 +35,7 @@ def make_backup(fname):
 
 def trigger_hook(hook):
     global config
-    exe = config['hooks'][hook]
+    exe = config['hooks'].get(hook)
     if exe is not None:
         subprocess.check_call([exe])
 
