@@ -19,10 +19,6 @@ def keyfile(name):
     global config
     return os.path.join(config['dirs']['keys'], name + ".key")
 
-def csrfile(name):
-    global config
-    return os.path.join(config['dirs']['keys'], name + ".csr.tmp")
-
 def make_backup(fname):
     if os.path.exists(fname):
         backupname = os.path.basename(fname) + "." + str(datetime.date.today())
@@ -50,43 +46,54 @@ def cert_expiry(name):
     from certcheck import cert_expiry_date
     return cert_expiry_date(certfile(name))
 
+## Work functions, operating on file names
+
 ## The interesting work
-def acme(name, domains):
+def acme(keyfilename, certfilename, domains):
     global config
+    accountkey = config['acme']['account-key']
+    csrfilename = certfilename + '.csr.tmp'
+    assert os.path.exists(keyfilename)
+    assert accountkey
     # Generating the CSR is done by a shell script
     exe = os.path.join(os.path.dirname(__file__), 'gencsr')
-    csr = subprocess.check_output([exe, keyfile(name)] + domains)
-    with open(csrfile(name), 'wb') as file:
+    csr = subprocess.check_output([exe, keyfilename] + domains)
+    assert not os.path.exists(csrfilename)
+    with open(csrfilename, 'wb') as file:
         file.write(csr)
     # call acme-tiny as a script
     acme_tiny = os.path.join(config['acme']['acme-tiny'], 'acme_tiny.py')
-    signed_crt = subprocess.check_output(["python", acme_tiny, "--quiet", "--account-key", config['acme']['account-key'], "--csr", csrfile(name), "--acme-dir", config['acme']['challenge-dir']])
+    signed_crt = subprocess.check_output(["python", acme_tiny, "--quiet", "--account-key", accountkey, "--csr", csrfilename, "--acme-dir", config['acme']['challenge-dir']])
     # save new certificate
-    make_backup(certfile(name))
-    with open(certfile(name), 'wb') as f:
+    make_backup(certfilename)
+    with open(certfilename, 'wb') as f:
         f.write(signed_crt)
     # clean up
-    os.remove(csrfile(name))
+    os.remove(csrfilename)
 
-def request_cert(name):
-    global config
-    if not os.path.exists(keyfile(name)):
-        raise Exception("No such key: {}".format(name))
-    domains = config['DEFAULT']['domains'].split()
-    print("Obtaining certificate '{}' for domains: {}".format(name, ' '.join(domains)))
-    acme(name, domains)
-
-def generate_key(name):
-    print("Generating new private key '{}'".format(name))
+def openssl_genrsa(keyfilename):
     with subprocess.Popen(["openssl", "genrsa", str(int(config['DEFAULT']['key-length']))], stdout=subprocess.PIPE, stderr=subprocess.PIPE) as f:
         (stdout, stderr) = f.communicate()
         if f.returncode:
             sys.stderr.write(stderr)
             raise Exception("Error while generating private key")
     # Now we have a key, save it. This should never overwrite anything.
-    assert not os.path.exists(keyfile(name))
-    with open(keyfile(name), 'wb') as f:
+    assert not os.path.exists(keyfilename)
+    with open(keyfilename, 'wb') as f:
         f.write(stdout)
+
+## High-level functions, operating on nice key names
+def request_cert(name):
+    global config
+    if not os.path.exists(keyfile(name)):
+        raise Exception("No such key: {}".format(name))
+    domains = config['DEFAULT']['domains'].split()
+    print("Obtaining certificate '{}' for domains: {}".format(name, ' '.join(domains)))
+    acme(keyfile(name), certfile(name), domains)
+
+def generate_key(name):
+    print("Generating new private key '{}'".format(name))
+    openssl_genrsa(keyfile(name))
 
 def check_staging(live, staging):
     '''Returns 0 if nothing was done, 1 if a stage key is present but has to be kept, 2 is a stage key was unstaged.'''
@@ -146,7 +153,7 @@ if __name__ == "__main__":
                         help="The action to perform. Possible values: init, renew, cron")
     args = parser.parse_args()
     
-    # read config
+    # read config, sanity check
     if not os.path.isfile(args.config):
         raise Exception("The config file does not exist: "+args.config)
     global config
@@ -186,6 +193,11 @@ if __name__ == "__main__":
             os.makedirs(config['dirs']['backups'], mode = 0o700, exist_ok = True)
         except OSError:
             pass
+        # if necessary, generate ACME account key
+        accountkey = config['acme']['account-key']
+        if not os.path.exists(accountkey):
+            print("Generating new ACME key")
+            openssl_genrsa(accountkey)
         # if necessary, generate key + certificate
         live = config['files']['live']
         if not os.path.exists(keyfile(live)):
