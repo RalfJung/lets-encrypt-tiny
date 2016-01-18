@@ -58,7 +58,7 @@ def acme(keyfilename, certfilename, domains):
     # Generating the CSR is done by a shell script
     exe = os.path.join(os.path.dirname(__file__), 'gencsr')
     csr = subprocess.check_output([exe, keyfilename] + domains)
-    assert not os.path.exists(csrfilename)
+    assert not os.path.exists(csrfilename), "The temporary CSR file {} still exists. It seems something went wrong on a previous request. You may want to remove the file manually.".format(csrfilename)
     with open(csrfilename, 'wb') as file:
         file.write(csr)
     # call acme-tiny as a script
