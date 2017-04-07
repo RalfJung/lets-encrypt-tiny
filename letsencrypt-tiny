@@ -61,15 +61,17 @@ def acme(keyfilename, certfilename, domains):
     assert not os.path.exists(csrfilename), "The temporary CSR file {} still exists. It seems something went wrong on a previous request. You may want to remove the file manually.".format(csrfilename)
     with open(csrfilename, 'wb') as file:
         file.write(csr)
-    # call acme-tiny as a script
-    acme_tiny = os.path.join(config['acme']['acme-tiny'], 'acme_tiny.py')
-    signed_crt = subprocess.check_output(["python", acme_tiny, "--quiet", "--account-key", accountkey, "--csr", csrfilename, "--acme-dir", config['acme']['challenge-dir']])
-    # save new certificate
-    make_backup(certfilename)
-    with open(certfilename, 'wb') as f:
-        f.write(signed_crt)
-    # clean up
-    os.remove(csrfilename)
+    try:
+        # call acme-tiny as a script
+        acme_tiny = os.path.join(config['acme']['acme-tiny'], 'acme_tiny.py')
+        signed_crt = subprocess.check_output(["python", acme_tiny, "--quiet", "--account-key", accountkey, "--csr", csrfilename, "--acme-dir", config['acme']['challenge-dir']])
+        # save new certificate
+        make_backup(certfilename)
+        with open(certfilename, 'wb') as f:
+            f.write(signed_crt)
+    finally:
+        # clean up
+        os.remove(csrfilename)
 
 def openssl_genrsa(keyfilename):
     with subprocess.Popen(["openssl", "genrsa", str(int(config['DEFAULT']['key-length']))], stdout=subprocess.PIPE, stderr=subprocess.PIPE) as f:
