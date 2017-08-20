@@ -94,6 +94,7 @@ def request_cert(name):
     acme(keyfile(name), certfile(name), domains)
 
 def generate_key(name):
+    assert not os.path.exists(certfile(name)), "Don't make create a new key for an old cert"
     print("Generating new private key '{}'".format(name))
     openssl_genrsa(keyfile(name))
 
@@ -204,6 +205,7 @@ if __name__ == "__main__":
         live = config['files']['live']
         if not os.path.exists(keyfile(live)):
             generate_key(live)
+        if not os.path.exists(certfile(live)):
             request_cert(live)
             if args.hooks:
                 trigger_hook('post-certchange')
