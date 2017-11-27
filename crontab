@@ -1,3 +1,4 @@
 # m h  dom mon dow   command
 32  7  *   *   *     /root/server-scripts/letsencrypt-tiny -c /root/letsencrypt/live.conf -k cron
 16  8  *   *   *     /root/server-scripts/mailman-check
+10 17  *   *   *     /root/server-scripts/certcheck /etc/ssl/mycerts -d 14
