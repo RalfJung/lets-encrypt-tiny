@@ -24,9 +24,8 @@ post-certchange = /home/user/letsencrypt/cert-hook
 # Example usage: Updating TLSA records (with the selector being SubjectPublicKeyInfo) in the zone
 post-keychange = /home/user/letsencrypt/key-hook
 
-# Parameters for acme-tiny <https://github.com/diafygi/acme-tiny/>
+# Parameters for the embedded acme-tiny <https://github.com/diafygi/acme-tiny/>
 [acme]
-acme-tiny = /home/user/letsencrypt/acme-tiny/
 account-key = /etc/ssl/private/letsencrypt/account.key
 challenge-dir = /srv/acme-challenge/
 

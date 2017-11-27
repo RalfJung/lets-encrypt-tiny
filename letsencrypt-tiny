@@ -63,7 +63,7 @@ def acme(keyfilename, certfilename, domains):
         file.write(csr)
     try:
         # call acme-tiny as a script
-        acme_tiny = os.path.join(config['acme']['acme-tiny'], 'acme_tiny.py')
+        acme_tiny = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'acme-tiny', 'acme_tiny.py')
         signed_crt = subprocess.check_output(["python", acme_tiny, "--quiet", "--account-key", accountkey, "--csr", csrfilename, "--acme-dir", config['acme']['challenge-dir']])
         # save new certificate
         make_backup(certfilename)
