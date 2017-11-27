@@ -1,0 +1,102 @@
+#!/usr/bin/env python2
+# -*- coding: utf-8 -*-
+from __future__ import print_function
+import sys, os, random, MySQLdb, subprocess, time, string, argparse
+import urllib, smtplib, email.mime.text, email.utils
+from settings import *
+from templates import *
+
+# setup
+random.seed = os.urandom(32)
+
+# DB stuff
+db = MySQLdb.connect(user=DB_USER, passwd=DB_PW, db=DB_NAME, charset='utf8')
+
+def db_execute(query, args):
+   cursor = db.cursor(MySQLdb.cursors.DictCursor)
+   if len(args) == 1 and isinstance(args[0], dict): args = args[0] # einzelnes dict weiterreichen
+   cursor.execute(query, args)
+   return cursor
+
+def db_fetch_one_row(query, *args):
+   cursor = db_execute(query, args)
+   result = cursor.fetchone()
+   if cursor.fetchone() is not None:
+      raise Exception("Found more than one result, only one was expected")
+   cursor.close()
+   return result
+
+def db_run(query, *args):
+   cursor = db_execute(query, args)
+   cursor.close()
+
+def new_user(name, hash, ):
+   db_run('INSERT INTO users (username, password, active) VALUES (%s, %s, -1)', name, hash)
+
+def new_alias(name, alias):
+   db_run('INSERT INTO aliases (mail, user) VALUES (%s, %s)', name, alias)
+
+# interaction with dbadm pw
+def gen_hash(plain):
+   return subprocess.check_output(["doveadm", "pw", "-s", "SHA512-CRYPT", "-r", str(64*1024), "-p", plain]).decode('utf-8').strip()
+
+# more tools
+def gen_pw(length = 12):
+   chars = string.ascii_letters + string.digits
+   return ''.join(random.choice(chars) for i in range(length))
+
+def send_mail(user, mail, password, forward):
+   assert password is not None, "Sending mail for non-password accounts not yet supported."
+   incoming = (INCOMING_FORWARD if forward else INCOMING_IMAP).format(password=password, user=user, host=HOST, forward=forward)
+   text = TEMPLATE.format(password=password, user=user, host=HOST, forward=forward, incoming=incoming)
+   subject = SUBJECT.format(user=user, host=HOST)
+   # construct mail content
+   msg = email.mime.text.MIMEText(text, 'plain', 'utf-8')
+   msg['Subject'] = subject
+   msg['Date'] = email.utils.formatdate(localtime=True)
+   msg['From'] = MAIL_ADDR
+   msg['To'] = mail
+   msg['Bcc'] = MAIL_ADDR
+   # put into envelope and send
+   s = smtplib.SMTP('localhost')
+   s.sendmail(MAIL_ADDR, [mail, MAIL_ADDR], msg.as_string())
+   s.quit()
+
+# read command-line arguments
+parser = argparse.ArgumentParser(description='Create a new e-mail user')
+parser.add_argument("-u", "--username",
+                    dest="username", required=True,
+                    help="The name of the user (that's also its address).")
+parser.add_argument("-f", "--forward",
+                    dest="forward",
+                    help="Where to forward emails to.")
+#parser.add_argument("-p", "--password",
+#                    action="store_true", dest="password",
+#                    help="Whether to create an account and password for this user.")
+parser.add_argument("-m", "--mail", nargs='?',
+                    action="store", dest="mail", const=True,
+                    help="Whether to notify the user about their new account.")
+args = parser.parse_args()
+
+# sanity check
+if args.mail == True:
+   if args.forward:
+      args.mail = args.forward
+   else:
+      print("Whom should I send the mail to? Please use `-m <address>`.")
+      sys.exit(1)
+domain = args.username.split('@')[-1]
+if domain not in DOMAINS:
+   print("{} is not a domain we can handle mail for.".format(domain))
+   sys.exit(1)
+
+# do stuff
+password = gen_pw()
+new_user(args.username, gen_hash(password))
+print("Created {} with password {}".format(args.username, password))
+if args.forward:
+   new_alias(args.username, args.forward)
+   print("Forwarded {} to {}".format(args.username, args.forward))
+if args.mail:         
+   send_mail(args.username, args.mail, password, args.forward)
+   print("Sent mail about the new account to {}".format(args.mail))
