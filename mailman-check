@@ -6,7 +6,7 @@ set -e
 
 cd /var/lib/mailman/lists
 for list in *; do
-    config_list  -i /dev/stdin "$list" <<EOF
+    /usr/sbin/config_list  -i /dev/stdin "$list" <<EOF
 if not ((mlist.dmarc_moderation_action in (1, 2) and mlist.dmarc_quarantine_moderation_action == 1) or mlist.from_is_list in (1, 2)):
     print "List",mlist.real_name,"by",(', '.join(mlist.owner)),"is not configured to deal with DMARC."
 if mlist.reply_goes_to_list != 0 and not mlist.first_strip_reply_to:
