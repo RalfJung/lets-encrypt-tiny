@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-## Call with "--help" for documentation.
+## See <https://www.ralfj.de/blog/2017/12/26/lets-encrypt.html> for documentation.
 
 import argparse, configparser, itertools, stat, os, os.path, sys, subprocess, datetime
 
