@@ -1,5 +1,6 @@
-# Server Scripts
+# Let's Encrypt Tiny
 
-This repository holds a collection of miscellaneous scripts that proved useful for administrating my servers.
-You are welcome to use them in whatever way you please - unless noted differently in the file itself, I concider them public domain.
-Check the comments at the beginning of the individual scripts to learn what they do.
+This is a tiny client for [Let's Encrypt](https://letsencrypt.org/) based on
+[acme-tiny](https://github.com/diafygi/acme-tiny).  For further information,
+check out the
+[accompanying blog post](https://www.ralfj.de/blog/2017/12/26/lets-encrypt.html).
