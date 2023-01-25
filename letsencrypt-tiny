@@ -123,9 +123,12 @@ def auto_renewal(live, staging):
     # determine what to do
     now = datetime.datetime.now()
     key_age = now - key_mtime(live)
-    cert_validity = cert_expiry(live) - now
     need_new_key = key_age >= max_key_age
-    need_new_cert = cert_validity <= renew_cert_time
+    if os.path.exists(live):
+        cert_validity = cert_expiry(live) - now
+        need_new_cert = cert_validity <= renew_cert_time
+    else:
+        need_new_cert = True
     if need_new_cert and key_age + renew_cert_time >= max_key_age:
         # We are about to request a new certificate, and within <renew_cert_time>, we need a new key: Get the new key now
         need_new_key = True
