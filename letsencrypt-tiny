@@ -124,7 +124,7 @@ def auto_renewal(live, staging):
     now = datetime.datetime.now()
     key_age = now - key_mtime(live)
     need_new_key = key_age >= max_key_age
-    if os.path.exists(live):
+    if os.path.exists(certfile(live)):
         cert_validity = cert_expiry(live) - now
         need_new_cert = cert_validity <= renew_cert_time
     else:
