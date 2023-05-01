@@ -21,6 +21,7 @@ def keyfile(name):
 
 def make_backup(fname):
     if os.path.exists(fname):
+        os.makedirs(config['dirs']['backups'])
         backupname = os.path.basename(fname) + "." + str(datetime.date.today())
         i = 0
         while True:
