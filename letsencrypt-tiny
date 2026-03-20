@@ -101,9 +101,9 @@ def generate_key(name):
 
 def check_staging(live, staging):
     '''Returns 0 if nothing was done, 1 if a stage key is present but has to be kept, 2 is a stage key was unstaged.'''
-    if not os.path.exists(keyfile(staging)):
+    if not (os.path.exists(keyfile(staging)) and os.path.exists(certfile(staging))):
         return 0
-    
+
     staging_time = datetime.timedelta(hours = int(config['timing'].get('staging-hours', 0)))
     key_age = datetime.datetime.now() - key_mtime(staging)
     if key_age < staging_time:
